@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Android Studio Web Logcat & ADB Console</title>
-  
+  <title>Android Studio Web Logcat & ADB Shell</title>
+
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -14,20 +14,20 @@
         extend: {
           colors: {
             ide: {
-              bg: '#0f172a',
-              sidebar: '#1e293b',
-              panel: '#182234',
+              bg: '#0b1120',
+              sidebar: '#151e32',
+              panel: '#1e293b',
               border: '#334155',
-              hover: '#2a374e',
-              accent: '#3b82f6',
+              hover: '#293548',
+              accent: '#3b82f6'
             },
             log: {
-              verbose: '#9e9e9e',
-              debug: '#2196f3',
-              info: '#4caf50',
-              warn: '#ff9800',
-              error: '#f44336',
-              fatal: '#e91e63'
+              verbose: '#94a3b8',
+              debug: '#38bdf8',
+              info: '#4ade80',
+              warn: '#fbbf24',
+              error: '#f87171',
+              fatal: '#f43f5e'
             }
           },
           fontFamily: {
@@ -41,9 +41,6 @@
   <!-- FontAwesome Icons CDN -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
-  <!-- WebADB JS CDN with fallback check -->
-  <script src="https://cdn.jsdelivr.net/gh/webadb/webadb.js@master/webadb.js" onerror="console.warn('WebADB CDN fallback activated')"></script>
-
   <style>
     /* Custom Scrollbars */
     ::-webkit-scrollbar {
@@ -51,7 +48,7 @@
       height: 8px;
     }
     ::-webkit-scrollbar-track {
-      background: #0f172a;
+      background: #0b1120;
     }
     ::-webkit-scrollbar-thumb {
       background: #334155;
@@ -61,7 +58,7 @@
       background: #475569;
     }
 
-    .log-line {
+    .log-row {
       font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
       font-size: 0.8125rem;
       line-height: 1.35;
@@ -69,96 +66,108 @@
       word-break: break-all;
     }
 
-    .log-line:hover {
+    .log-row:hover {
       background-color: rgba(255, 255, 255, 0.05);
     }
 
-    .terminal-out {
-      font-family: 'JetBrains Mono', 'Fira Code', monospace;
-      font-size: 0.85rem;
+    .pulse-glow {
+      animation: pulseGlow 1.5s infinite;
     }
 
-    .pulse-animation {
-      animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    @keyframes pulse {
+    @keyframes pulseGlow {
       0%, 100% { opacity: 1; }
-      50% { opacity: .4; }
+      50% { opacity: 0.4; }
     }
   </style>
 </head>
 
 <body class="bg-ide-bg text-slate-200 h-full flex flex-col font-sans overflow-hidden select-none">
 
-  <!-- Toast Container -->
+  <!-- Notifications Toast Container -->
   <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <!-- Browser Support Alert Banner -->
-  <div id="browser-warning" class="hidden bg-amber-600/90 text-white px-4 py-2 text-sm flex items-center justify-between shadow-lg">
-    <div class="flex items-center gap-2">
-      <i class="fa-solid fa-triangle-exclamation text-lg"></i>
-      <span><strong>Navegador No Soportado para WebUSB:</strong> Para conectar tu smartphone por USB, se requiere <strong>Google Chrome</strong> o <strong>Microsoft Edge</strong>. Firefox y Safari no soportan la WebUSB API.</span>
+  <!-- Claim Interface / ADB Lock Error Modal -->
+  <div id="modal-adb-error" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-ide-panel border border-red-500/50 rounded-xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center gap-3 text-red-400">
+        <div class="bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+          <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">Error de Interfaz USB Ocupada</h3>
+          <p class="text-xs text-red-300 font-mono">unable to claim interface / device locked</p>
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-300 leading-relaxed">
+        El navegador no pudo obtener control del puerto USB porque <strong>otro proceso de ADB en tu PC está ocupando la conexión</strong> (ej. Android Studio, VS Code, scrcpy o la terminal).
+      </p>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
+        <p class="text-xs font-bold text-slate-200">Ejecuta esto en la terminal de tu PC:</p>
+        <div class="flex items-center justify-between bg-slate-950 p-2 rounded border border-slate-800 text-xs font-mono text-emerald-400">
+          <code>adb kill-server</code>
+          <button onclick="copyToClipboard('adb kill-server')" class="text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-800 text-[10px]">
+            <i class="fa-regular fa-copy"></i> Copiar
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-400">Luego desconecta el cable USB de tu móvil, vuelve a conectarlo y reintenta.</p>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closeAdbErrorModal()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-1.5 rounded-lg text-xs font-semibold">
+          Entendido
+        </button>
+      </div>
     </div>
-    <button onclick="dismissWarning()" class="text-white hover:text-slate-200 font-bold px-2">
-      <i class="fa-solid fa-xmark"></i>
-    </button>
   </div>
 
-  <!-- Top Header Navigation -->
+  <!-- Top Navigation Bar -->
   <header class="bg-ide-sidebar border-b border-ide-border px-4 py-2.5 flex items-center justify-between flex-wrap gap-3">
-    <!-- Brand Title -->
     <div class="flex items-center gap-3">
-      <div class="bg-gradient-to-tr from-green-500 to-emerald-400 p-2 rounded-lg shadow-md text-slate-950 font-bold">
+      <div class="bg-gradient-to-tr from-green-500 to-emerald-400 p-2 rounded-lg text-slate-950 font-bold shadow-md shadow-emerald-950">
         <i class="fa-brands fa-android text-xl"></i>
       </div>
       <div>
-        <h1 class="text-base font-bold text-white tracking-wide leading-tight">Android Studio Web Logcat</h1>
-        <p class="text-xs text-slate-400">ADB WebUSB Debugger & Terminal Bridge</p>
+        <h1 class="text-base font-bold text-white leading-tight">Android Studio Web Logcat</h1>
+        <p class="text-xs text-slate-400">WebUSB & WebADB Console Debugger</p>
       </div>
     </div>
 
-    <!-- Connection & Status Bar -->
+    <!-- Right Controls -->
     <div class="flex items-center gap-3 flex-wrap">
-      <!-- Device Metadata Badge -->
+      <!-- Device Badge -->
       <div id="device-info-badge" class="hidden bg-slate-900 border border-slate-700 rounded-lg px-3 py-1 flex items-center gap-3 text-xs">
         <div class="flex items-center gap-1.5 text-slate-300">
           <i class="fa-solid fa-mobile-screen-button text-emerald-400"></i>
           <span id="dev-model-name" class="font-semibold text-white">Dispositivo</span>
         </div>
-        <span class="text-slate-600">|</span>
+        <span class="text-slate-700">|</span>
         <div class="flex items-center gap-1.5 text-slate-400">
-          <i class="fa-solid fa-barcode"></i>
+          <i class="fa-solid fa-fingerprint"></i>
           <span id="dev-serial" class="font-mono">SN: ---</span>
-        </div>
-        <span class="text-slate-600">|</span>
-        <div class="flex items-center gap-1.5 text-slate-400">
-          <i id="battery-icon" class="fa-solid fa-battery-half text-emerald-400"></i>
-          <span id="dev-battery">--%</span>
         </div>
       </div>
 
-      <!-- Status Indicator Pill -->
+      <!-- Status Pill -->
       <div id="status-pill" class="bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2 text-xs font-medium">
         <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
         <span id="status-text" class="text-slate-300">Desconectado</span>
       </div>
 
-      <!-- USB Connect Button -->
-      <button id="btn-connect" onclick="toggleUSBConnection()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition shadow-md active:scale-95">
-        <i class="fa-solid fa-plug text-sm"></i>
-        <span>Conectar Dispositivo USB</span>
+      <!-- Main Action Buttons -->
+      <button id="btn-connect" onclick="connectUSBDevice()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition shadow-md active:scale-95">
+        <i class="fa-solid fa-plug"></i>
+        <span>Conectar USB</span>
       </button>
 
-      <!-- Demo Mode Switch Button -->
       <button id="btn-demo" onclick="toggleDemoMode()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition active:scale-95">
         <i class="fa-solid fa-flask text-amber-400"></i>
-        <span id="demo-btn-text">Probar Modo Demo</span>
+        <span id="demo-btn-text">Modo Demo</span>
       </button>
 
-      <!-- Export Logcat Button -->
       <button onclick="exportLogcatFile()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition shadow-md active:scale-95">
-        <i class="fa-solid fa-download"></i>
+        <i class="fa-solid fa-file-arrow-down"></i>
         <span>Exportar .logcat</span>
       </button>
     </div>
@@ -173,172 +182,164 @@
     </button>
     <button id="tab-btn-shell" onclick="switchTab('shell')" class="px-4 py-2 text-xs font-semibold text-slate-400 border-b-2 border-transparent hover:text-slate-200 flex items-center gap-2 transition">
       <i class="fa-solid fa-terminal"></i>
-      <span>Comandos ADB Shell</span>
+      <span>ADB Shell Terminal</span>
     </button>
     <button id="tab-btn-guide" onclick="switchTab('guide')" class="px-4 py-2 text-xs font-semibold text-slate-400 border-b-2 border-transparent hover:text-slate-200 flex items-center gap-2 transition">
       <i class="fa-solid fa-circle-question"></i>
-      <span>Guía y Ayuda</span>
+      <span>Guía y Solución de Errores</span>
     </button>
   </nav>
 
-  <!-- MAIN VIEWPORT CONTAINER -->
+  <!-- MAIN VIEWPORT -->
   <main class="flex-1 relative overflow-hidden bg-slate-950 flex flex-col">
 
     <!-- ================= TAB 1: LOGCAT VIEWER ================= -->
     <section id="view-logcat" class="flex-1 flex flex-col h-full overflow-hidden">
       
-      <!-- Android Studio Logcat Filter Toolbar -->
+      <!-- Android Studio Filter Bar -->
       <div class="bg-ide-panel border-b border-ide-border p-2.5 flex items-center justify-between gap-2 flex-wrap">
-        <div class="flex items-center gap-2 flex-1 min-w-[280px]">
+        <div class="flex items-center gap-2 flex-1 min-w-[300px] flex-wrap">
           
-          <!-- Minimum Log Level Dropdown -->
+          <!-- Minimum Level -->
           <div class="flex items-center gap-1.5">
-            <label class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Nivel:</label>
+            <label class="text-[11px] text-slate-400 font-semibold uppercase">Nivel:</label>
             <select id="filter-level" onchange="applyFilters()" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-emerald-500 font-semibold">
-              <option value="V" class="text-slate-400 font-bold">Verbose (V)</option>
-              <option value="D" class="text-blue-400 font-bold" selected>Debug (D)</option>
-              <option value="I" class="text-emerald-400 font-bold">Info (I)</option>
-              <option value="W" class="text-amber-400 font-bold">Warning (W)</option>
-              <option value="E" class="text-red-400 font-bold">Error (E)</option>
-              <option value="F" class="text-rose-500 font-bold">Fatal (F)</option>
+              <option value="V" class="text-slate-400">Verbose (V)</option>
+              <option value="D" class="text-blue-400" selected>Debug (D)</option>
+              <option value="I" class="text-emerald-400">Info (I)</option>
+              <option value="W" class="text-amber-400">Warning (W)</option>
+              <option value="E" class="text-red-400">Error (E)</option>
+              <option value="F" class="text-rose-500">Fatal (F)</option>
             </select>
           </div>
 
-          <!-- Package Name / Process ID Input -->
-          <div class="relative flex-1 max-w-[220px]">
+          <!-- Package / PID Filter -->
+          <div class="relative flex-1 max-w-[200px]">
             <i class="fa-solid fa-box text-slate-500 text-xs absolute left-2.5 top-2.5"></i>
             <input id="filter-pkg" type="text" oninput="applyFilters()" placeholder="Package / PID (ej. com.app)" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded pl-7 pr-2 py-1 focus:outline-none focus:border-emerald-500 placeholder-slate-500" />
           </div>
 
-          <!-- Tag Input Filter -->
+          <!-- Tag Filter -->
           <div class="relative flex-1 max-w-[180px]">
             <i class="fa-solid fa-tag text-slate-500 text-xs absolute left-2.5 top-2.5"></i>
             <input id="filter-tag" type="text" oninput="applyFilters()" placeholder="Tag (ej. ActivityManager)" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded pl-7 pr-2 py-1 focus:outline-none focus:border-emerald-500 placeholder-slate-500" />
           </div>
 
-          <!-- Global Search Input -->
+          <!-- Search Query Filter -->
           <div class="relative flex-1 min-w-[200px]">
             <i class="fa-solid fa-magnifying-glass text-slate-500 text-xs absolute left-2.5 top-2.5"></i>
-            <input id="filter-search" type="text" oninput="applyFilters()" placeholder="Buscar en logs (mensaje/texto)..." class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded pl-7 pr-12 py-1 focus:outline-none focus:border-emerald-500 placeholder-slate-500" />
-            
+            <input id="filter-search" type="text" oninput="applyFilters()" placeholder="Buscar en logs..." class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded pl-7 pr-12 py-1 focus:outline-none focus:border-emerald-500 placeholder-slate-500" />
             <label class="absolute right-2 top-1 flex items-center gap-1 text-[10px] text-slate-400 cursor-pointer select-none">
-              <input id="filter-regex" type="checkbox" onchange="applyFilters()" class="rounded bg-slate-800 border-slate-700 text-emerald-500 focus:ring-0">
+              <input id="filter-regex" type="checkbox" onchange="applyFilters()" class="rounded bg-slate-800 border-slate-700 text-emerald-500">
               <span>Regex</span>
             </label>
           </div>
         </div>
 
-        <!-- Log Stream Action Buttons -->
+        <!-- Toolbar Actions -->
         <div class="flex items-center gap-1.5">
-          <!-- Pause/Play Stream Toggle -->
-          <button id="btn-pause" onclick="togglePauseStream()" title="Pausar o Reanudar Scroll" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition">
+          <button id="btn-pause" onclick="togglePauseStream()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition">
             <i id="pause-icon" class="fa-solid fa-pause text-amber-400"></i>
             <span id="pause-text">Pausar</span>
           </button>
 
-          <!-- Clear Logs -->
-          <button onclick="clearLogcatScreen()" title="Limpiar logs de pantalla" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition">
+          <button onclick="clearLogcatScreen()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition">
             <i class="fa-solid fa-ban text-red-400"></i>
             <span>Limpiar</span>
           </button>
 
-          <!-- Autoscroll Toggle -->
           <label class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2.5 py-1 rounded text-xs text-slate-300 cursor-pointer select-none">
-            <input id="toggle-autoscroll" type="checkbox" checked onchange="toggleAutoScroll()" class="rounded text-emerald-500 focus:ring-0">
+            <input id="toggle-autoscroll" type="checkbox" checked onchange="toggleAutoScroll()" class="rounded text-emerald-500">
             <span>Auto-scroll</span>
           </label>
         </div>
       </div>
 
-      <!-- Logcat Table Column Header -->
+      <!-- Logcat Table Headers -->
       <div class="bg-slate-900 text-slate-400 text-[11px] font-mono font-bold px-3 py-1.5 border-b border-slate-800 grid grid-cols-12 gap-2 select-none">
-        <div class="col-span-2 md:col-span-2">Fecha / Hora</div>
-        <div class="col-span-1 md:col-span-1 text-center">PID/TID</div>
-        <div class="col-span-1 md:col-span-1 text-center">Nivel</div>
-        <div class="col-span-2 md:col-span-2 truncate">Tag / Proceso</div>
-        <div class="col-span-6 md:col-span-6">Mensaje</div>
+        <div class="col-span-2">Fecha / Hora</div>
+        <div class="col-span-1 text-center">PID/TID</div>
+        <div class="col-span-1 text-center">Nivel</div>
+        <div class="col-span-2 truncate">Tag / Proceso</div>
+        <div class="col-span-6">Mensaje</div>
       </div>
 
-      <!-- Logcat Output Viewport -->
+      <!-- Logcat Rows Output -->
       <div id="logcat-viewport" class="flex-1 overflow-y-auto px-2 py-1 bg-slate-950 font-mono text-xs flex flex-col gap-0.5">
-        <!-- Logs render dynamically here -->
-        <div id="logcat-empty" class="text-center py-20 text-slate-600 flex flex-col items-center gap-3">
+        <div id="logcat-empty" class="text-center py-24 text-slate-600 flex flex-col items-center gap-3">
           <i class="fa-solid fa-list-ul text-4xl text-slate-700"></i>
-          <p class="text-sm">No hay logs capturados aún.</p>
-          <p class="text-xs text-slate-500">Conecta un dispositivo USB o haz clic en "Probar Modo Demo" para iniciar la transmisión.</p>
+          <p class="text-sm font-semibold">Esperando logs de Android...</p>
+          <p class="text-xs text-slate-500 max-w-md">Haz clic en <strong>"Conectar USB"</strong> para emparejar tu dispositivo Android o activa <strong>"Modo Demo"</strong> para probar la consola inmediatamente.</p>
         </div>
       </div>
 
-      <!-- Logcat Bottom Summary Bar -->
+      <!-- Bottom Status Bar -->
       <div class="bg-ide-panel border-t border-ide-border px-3 py-1 flex items-center justify-between text-[11px] text-slate-400 font-mono">
         <div class="flex items-center gap-4">
           <span>Mostrando: <strong id="lbl-visible-count" class="text-emerald-400">0</strong> / <span id="lbl-total-count">0</span> logs</span>
-          <span>Buffer: <span id="lbl-buffer-pct" class="text-slate-300">0%</span></span>
+          <span>Buffer Circular: <span id="lbl-buffer-pct" class="text-slate-300">0%</span></span>
         </div>
         <div class="flex items-center gap-3">
-          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Stream: <span id="lbl-rate">0 logs/s</span></span>
+          <span>Flujo: <span id="lbl-rate" class="text-emerald-400 font-semibold">0 logs/s</span></span>
         </div>
       </div>
     </section>
 
-    <!-- ================= TAB 2: ADB SHELL COMMANDS ================= -->
+    <!-- ================= TAB 2: ADB SHELL TERMINAL ================= -->
     <section id="view-shell" class="hidden flex-1 flex flex-col h-full overflow-hidden p-3 gap-3">
       
-      <!-- Preset Quick Actions Grid -->
+      <!-- Quick Presets Grid -->
       <div class="bg-ide-panel border border-ide-border rounded-lg p-3">
         <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
           <i class="fa-solid fa-bolt text-amber-400"></i>
-          Acciones Rápida ADB Shell
+          Atajos de Comandos ADB Shell
         </h3>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-          <button onclick="runPresetCommand('adb shell dumpsys battery')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition text-left">
+          <button onclick="runPresetCommand('adb shell dumpsys battery')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition">
             <i class="fa-solid fa-battery-three-quarters text-emerald-400"></i>
-            <span>Estado Batería</span>
+            <span>Batería</span>
           </button>
-          <button onclick="runPresetCommand('adb shell getprop')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition text-left">
+          <button onclick="runPresetCommand('adb shell getprop')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition">
             <i class="fa-solid fa-circle-info text-blue-400"></i>
-            <span>Info Propiedades</span>
+            <span>Propiedades</span>
           </button>
-          <button onclick="runPresetCommand('adb shell pm list packages -3')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition text-left">
+          <button onclick="runPresetCommand('adb shell pm list packages -3')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition">
             <i class="fa-solid fa-cubes text-purple-400"></i>
             <span>Apps Instaladas</span>
           </button>
-          <button onclick="runPresetCommand('adb shell df -h')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition text-left">
+          <button onclick="runPresetCommand('adb shell df -h')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition">
             <i class="fa-solid fa-hard-drive text-amber-400"></i>
-            <span>Almacenamiento</span>
+            <span>Disco / Espacio</span>
           </button>
-          <button onclick="runPresetCommand('adb shell screencap -p /sdcard/screenshot.png')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition text-left">
-            <i class="fa-solid fa-camera text-cyan-400"></i>
-            <span>Captura Pantalla</span>
+          <button onclick="runPresetCommand('adb shell uptime')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition">
+            <i class="fa-solid fa-clock text-cyan-400"></i>
+            <span>Uptime</span>
           </button>
-          <button onclick="runPresetCommand('adb shell input keyevent 26')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition text-left">
+          <button onclick="runPresetCommand('adb shell input keyevent 26')" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 p-2 rounded text-xs font-semibold flex items-center gap-2 transition">
             <i class="fa-solid fa-power-off text-red-400"></i>
-            <span>Bloquear / Pantalla</span>
+            <span>Power Toggle</span>
           </button>
         </div>
       </div>
 
-      <!-- ADB Terminal Viewport -->
+      <!-- Terminal Emulator -->
       <div class="flex-1 bg-slate-950 border border-slate-800 rounded-lg flex flex-col overflow-hidden font-mono text-xs">
-        <!-- Terminal Output Header -->
         <div class="bg-slate-900 px-3 py-1.5 border-b border-slate-800 flex items-center justify-between text-slate-400">
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
             <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
             <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-            <span class="text-xs font-bold text-slate-300 ml-2">ADB Shell Output Terminal</span>
+            <span class="text-xs font-bold text-slate-300 ml-2">ADB Shell Console</span>
           </div>
           <button onclick="clearTerminal()" class="text-slate-400 hover:text-white transition text-xs">
             <i class="fa-solid fa-trash-can"></i> Limpiar
           </button>
         </div>
 
-        <!-- Terminal Output Area -->
-        <div id="terminal-output" class="flex-1 overflow-y-auto p-3 text-slate-200 whitespace-pre-wrap leading-relaxed select-text font-mono">
-          <span class="text-slate-500">ADB Shell Terminal lista. Escribe un comando como "adb shell getprop" o haz clic en una de las acciones rápidas arriba.<br><br></span>
+        <div id="terminal-output" class="flex-1 overflow-y-auto p-3 text-slate-200 whitespace-pre-wrap leading-relaxed select-text">
+          <span class="text-slate-500">Terminal lista. Conecta tu dispositivo por USB o usa el Modo Demo.<br></span>
         </div>
 
-        <!-- Terminal Input Bar -->
         <form onsubmit="submitTerminalCommand(event)" class="bg-slate-900 p-2 border-t border-slate-800 flex items-center gap-2">
           <span class="text-emerald-400 font-bold pl-2">shell@android:$</span>
           <input id="terminal-input" type="text" autocomplete="off" placeholder="Escribe comando ADB (ej. adb shell dumpsys battery)..." class="flex-1 bg-transparent text-white font-mono text-xs focus:outline-none" />
@@ -354,114 +355,85 @@
       <div class="bg-ide-panel border border-ide-border rounded-xl p-6 shadow-xl space-y-4">
         <h2 class="text-xl font-bold text-white flex items-center gap-2">
           <i class="fa-brands fa-usb text-emerald-400"></i>
-          Cómo conectar tu smartphone Android por USB
+          Guía de Conexión USB y Solución de Errores
         </h2>
-        
-        <ol class="list-decimal list-inside space-y-3 text-slate-300 leading-relaxed">
-          <li>
-            <strong class="text-white">Activar Opciones de Desarrollador:</strong> Ve a <em>Ajustes &gt; Acerca del teléfono</em> y toca <strong>7 veces consecutivas</strong> sobre <em>"Número de compilación"</em>.
-          </li>
-          <li>
-            <strong class="text-white">Activar Depuración USB:</strong> Ve a <em>Ajustes &gt; Sistema &gt; Opciones de desarrollador</em> y activa la opción <strong>"Depuración por USB"</strong> (USB Debugging).
-          </li>
-          <li>
-            <strong class="text-white">Conectar Cable USB:</strong> Conecta el dispositivo al ordenador utilizando un cable USB de datos de buena calidad.
-          </li>
-          <li>
-            <strong class="text-white">Iniciar Conexión en el Navegador:</strong> Haz clic en el botón verde <strong>"Conectar Dispositivo USB"</strong> arriba a la derecha. Se abrirá la ventana emergente de selección de USB de Chrome/Edge.
-          </li>
-          <li>
-            <strong class="text-white">Autorizar en la Pantalla del Teléfono:</strong> Revisa la pantalla de tu móvil. Aparecerá un cuadro emergente pidiendo <em>"¿Permitir depuración por USB?"</em>. Marca <strong>"Permitir siempre desde este equipo"</strong> y pulsa <strong>Aceptar</strong>.
-          </li>
-        </ol>
-      </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="bg-ide-panel border border-ide-border rounded-xl p-5 space-y-2">
-          <h3 class="text-base font-bold text-white flex items-center gap-2">
-            <i class="fa-solid fa-shield-halved text-amber-400"></i>
-            Compatibilidad de Navegadores
-          </h3>
-          <p class="text-xs text-slate-400 leading-relaxed">
-            Esta aplicación usa la API estándar <strong>WebUSB</strong>. Solamente es compatible con navegadores basados en Chromium:
-          </p>
-          <ul class="text-xs text-slate-300 list-disc list-inside space-y-1">
-            <li>Google Chrome (Versión 61+)</li>
-            <li>Microsoft Edge (Versión 79+)</li>
-            <li>Brave Browser / Opera</li>
-          </ul>
-        </div>
+        <div class="space-y-4">
+          <div class="border-l-4 border-emerald-500 pl-4 py-1 space-y-1">
+            <h4 class="font-bold text-white">1. Activar Opciones de Desarrollador</h4>
+            <p class="text-xs text-slate-400">Ve a <em>Ajustes &gt; Acerca del teléfono</em> y toca <strong>7 veces</strong> sobre <em>"Número de compilación"</em>.</p>
+          </div>
 
-        <div class="bg-ide-panel border border-ide-border rounded-xl p-5 space-y-2">
-          <h3 class="text-base font-bold text-white flex items-center gap-2">
-            <i class="fa-solid fa-wrench text-blue-400"></i>
-            Solución de Problemas
-          </h3>
-          <p class="text-xs text-slate-400 leading-relaxed">
-            Si la consola ADB de Android en PC local está abierta (ej. <code>adb server</code> corriendo), puede bloquear el puerto USB. Cierra la consola en tu PC ejecutando:
-          </p>
-          <code class="block bg-slate-900 text-emerald-400 p-2 rounded text-xs font-mono">adb kill-server</code>
+          <div class="border-l-4 border-emerald-500 pl-4 py-1 space-y-1">
+            <h4 class="font-bold text-white">2. Habilitar Depuración USB</h4>
+            <p class="text-xs text-slate-400">En <em>Ajustes &gt; Opciones de desarrollador</em>, activa el interruptor <strong>"Depuración por USB"</strong>.</p>
+          </div>
+
+          <div class="border-l-4 border-amber-500 pl-4 py-1 space-y-1">
+            <h4 class="font-bold text-amber-300">3. Solución al error "failed to claim interface / unable to claim"</h4>
+            <p class="text-xs text-slate-300">
+              Si aparece este error, significa que <strong>Android Studio, VS Code, scrcpy o el servidor `adb` nativo de tu PC</strong> tienen bloqueada la interfaz del celular.
+            </p>
+            <div class="bg-slate-900 p-2 rounded text-xs font-mono text-emerald-400 mt-1">
+              adb kill-server
+            </div>
+            <p class="text-[11px] text-slate-400">Ejecuta ese comando en el CMD/Terminal de tu ordenador y reconecta el cable USB.</p>
+          </div>
+
+          <div class="border-l-4 border-blue-500 pl-4 py-1 space-y-1">
+            <h4 class="font-bold text-blue-300">4. Autorizar Huella Digital RSA</h4>
+            <p class="text-xs text-slate-300">Cuando presionas "Conectar USB", mira la pantalla de tu teléfono. Marca <strong>"Permitir siempre desde este equipo"</strong> y presiona Aceptar.</p>
+          </div>
         </div>
       </div>
     </section>
   </main>
 
-  <!-- JAVASCRIPT LOGIC -->
   <script>
     /* ================= GLOBAL STATE ================= */
-    let adbDevice = null;
-    let webusbAdb = null;
+    let usbDevice = null;
+    let inEndpoint = null;
+    let outEndpoint = null;
+    let interfaceNumber = null;
+    
     let isConnected = false;
     let isDemoMode = false;
     let isPaused = false;
     let autoScroll = true;
     let demoInterval = null;
 
-    // Circular Log Buffer Management
+    // RSA Cryptographic Keys for ADB Authentication
+    let rsaKeyPair = null;
+
+    // Circular Log Buffer
     const MAX_BUFFER_SIZE = 5000;
-    const MAX_DOM_RENDER = 1500;
+    const MAX_DOM_RENDER = 1000;
     let rawLogs = [];
     let filteredLogs = [];
     let logCounter = 0;
 
-    // Metrics tracking
+    // Metrics
     let logsInLastSecond = 0;
     let currentLogRate = 0;
-    let rateInterval = null;
 
-    // Filtering options
+    // Filters
     let currentMinLevel = 'D';
     let currentPkgFilter = '';
     let currentTagFilter = '';
     let currentSearchQuery = '';
     let isRegexSearch = false;
 
-    // Log level order ranking
-    const LEVEL_WEIGHTS = {
-      'V': 0,
-      'D': 1,
-      'I': 2,
-      'W': 3,
-      'E': 4,
-      'F': 5
-    };
+    const LEVEL_WEIGHTS = { 'V': 0, 'D': 1, 'I': 2, 'W': 3, 'E': 4, 'F': 5 };
 
-    window.addEventListener('DOMContentLoaded', () => {
-      checkBrowserSupport();
+    // Terminal History
+    let commandHistory = [];
+    let historyIndex = -1;
+
+    window.addEventListener('DOMContentLoaded', async () => {
       startMetricsLoop();
+      await generateAdbRsaKeyPair();
+      setupTerminalKeyListeners();
     });
-
-    // Verify WebUSB API support
-    function checkBrowserSupport() {
-      if (!('usb' in navigator)) {
-        const warning = document.getElementById('browser-warning');
-        if (warning) warning.classList.remove('hidden');
-      }
-    }
-
-    function dismissWarning() {
-      document.getElementById('browser-warning').classList.add('hidden');
-    }
 
     function showToast(message, type = 'info') {
       const container = document.getElementById('toast-container');
@@ -503,7 +475,24 @@
       }
     }
 
-    async function toggleUSBConnection() {
+    async function generateAdbRsaKeyPair() {
+      try {
+        rsaKeyPair = await window.crypto.subtle.generateKey(
+          {
+            name: "RSASSA-PKCS1-v1_5",
+            modulusLength: 2048,
+            publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+            hash: { name: "SHA-1" }
+          },
+          true,
+          ["sign", "verify"]
+        );
+      } catch (err) {
+        console.error("Error generating RSA keys:", err);
+      }
+    }
+
+    async function connectUSBDevice() {
       if (isConnected) {
         disconnectUSBDevice();
         return;
@@ -517,114 +506,227 @@
       updateStatus('connecting', 'Buscando USB...');
 
       try {
-        if (typeof Adb !== 'undefined') {
-          webusbAdb = await Adb.open('WebUSB');
-          if (webusbAdb) {
-            updateStatus('authorizing', 'Autorizando en pantalla celular...');
-            showToast('Revisa la pantalla de tu móvil y acepta el mensaje de Depuración USB.', 'warning');
-            
-            adbDevice = await webusbAdb.connectAdb('host::');
-            
-            if (adbDevice) {
-              isConnected = true;
-              if (isDemoMode) stopDemoMode();
-              
-              updateStatus('connected', 'Conectado USB');
-              showToast('¡Dispositivo Android conectado exitosamente!', 'success');
-              
-              // Read device specs
-              fetchDeviceInfo();
-              // Start real Logcat stream
-              startRealLogcatStream();
-              return;
+        // Universal ADB Filter (classCode 0xFF, subclassCode 0x42, protocolCode 0x01)
+        usbDevice = await navigator.usb.requestDevice({
+          filters: [{ classCode: 0xFF, subclassCode: 0x42, protocolCode: 0x01 }]
+        });
+
+        if (!usbDevice) throw new Error('No se seleccionó ningún dispositivo USB.');
+
+        await usbDevice.open();
+        if (usbDevice.configuration === null) {
+          await usbDevice.selectConfiguration(1);
+        }
+
+        // Locate ADB Interface & Endpoints
+        let adbInterface = null;
+        for (const config of usbDevice.configurations) {
+          for (const iface of config.interfaces) {
+            for (const alt of iface.alternates) {
+              if (alt.interfaceClass === 0xFF && alt.interfaceSubclass === 0x42 && alt.interfaceProtocol === 0x01) {
+                adbInterface = iface;
+                interfaceNumber = iface.interfaceNumber;
+                
+                for (const ep of alt.endpoints) {
+                  if (ep.direction === 'in') inEndpoint = ep.endpointNumber;
+                  if (ep.direction === 'out') outEndpoint = ep.endpointNumber;
+                }
+                break;
+              }
             }
           }
         }
-        
-        throw new Error('No se pudo inicializar la librería WebADB o el usuario canceló la selección USB.');
+
+        if (interfaceNumber === null) {
+          throw new Error('El dispositivo no expone una interfaz ADB válida. Revisa que la Depuración USB esté activa.');
+        }
+
+        // Claim Interface with Error Trap
+        try {
+          await usbDevice.claimInterface(interfaceNumber);
+        } catch (claimErr) {
+          console.error("Claim interface error:", claimErr);
+          document.getElementById('modal-adb-error').classList.remove('hidden');
+          updateStatus('disconnected', 'Desconectado');
+          return;
+        }
+
+        updateStatus('authorizing', 'Autorizando en teléfono...');
+        showToast('Revisa la pantalla del celular y acepta el diálogo "Permitir depuración por USB".', 'warning');
+
+        // Execute ADB Protocol Handshake
+        await performAdbHandshake();
+
+        isConnected = true;
+        if (isDemoMode) stopDemoMode();
+
+        updateStatus('connected', 'Conectado USB');
+        showToast('¡Dispositivo Android conectado exitosamente!', 'success');
+
+        // Set device badge info
+        document.getElementById('dev-model-name').innerText = usbDevice.productName || 'Android Device';
+        document.getElementById('dev-serial').innerText = `SN: ${usbDevice.serialNumber || 'USB'}`;
+        document.getElementById('device-info-badge').classList.remove('hidden');
+
+        // Start Logcat Listener
+        startAdbLogcatStream();
+
       } catch (err) {
-        console.error('USB Connect error:', err);
+        console.error('Connection error:', err);
         updateStatus('disconnected', 'Desconectado');
-        showToast(err.message || 'Error al conectar dispositivo USB', 'error');
+        if (!err.message.includes('No se seleccionó')) {
+          showToast(err.message || 'Error al conectar dispositivo USB', 'error');
+        }
       }
+    }
+
+    function closeAdbErrorModal() {
+      document.getElementById('modal-adb-error').classList.add('hidden');
     }
 
     function disconnectUSBDevice() {
       isConnected = false;
-      adbDevice = null;
-      webusbAdb = null;
+      if (usbDevice) {
+        try {
+          usbDevice.releaseInterface(interfaceNumber);
+          usbDevice.close();
+        } catch (e) {}
+      }
+      usbDevice = null;
       updateStatus('disconnected', 'Desconectado');
       document.getElementById('device-info-badge').classList.add('hidden');
       showToast('Dispositivo desconectado.', 'info');
     }
 
-    function updateStatus(state, text) {
-      const dot = document.getElementById('status-dot');
-      const label = document.getElementById('status-text');
-      const btn = document.getElementById('btn-connect');
+    async function sendAdbPacket(cmd, arg0, arg1, data = new Uint8Array(0)) {
+      if (!usbDevice) return;
 
-      label.innerText = text;
+      const header = new ArrayBuffer(24);
+      const view = new DataView(header);
 
-      if (state === 'connected') {
-        dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500';
-        btn.innerHTML = '<i class="fa-solid fa-plug-circle-xmark"></i> <span>Desconectar</span>';
-        btn.className = 'bg-red-600 hover:bg-red-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition shadow-md active:scale-95';
-      } else if (state === 'connecting' || state === 'authorizing') {
-        dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 pulse-animation';
-        btn.disabled = true;
-      } else {
-        dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-500';
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-plug text-sm"></i> <span>Conectar Dispositivo USB</span>';
-        btn.className = 'bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition shadow-md active:scale-95';
+      // Convert String cmd to uint32
+      const cmdCode = cmd.charCodeAt(0) | (cmd.charCodeAt(1) << 8) | (cmd.charCodeAt(2) << 16) | (cmd.charCodeAt(3) << 24);
+      const magic = cmdCode ^ 0xFFFFFFFF;
+
+      let checksum = 0;
+      for (let i = 0; i < data.length; i++) {
+        checksum = (checksum + data[i]) & 0xFFFFFFFF;
+      }
+
+      view.setUint32(0, cmdCode, true);
+      view.setUint32(4, arg0, true);
+      view.setUint32(8, arg1, true);
+      view.setUint32(12, data.length, true);
+      view.setUint32(16, checksum, true);
+      view.setUint32(20, magic, true);
+
+      await usbDevice.transferOut(outEndpoint, header);
+      if (data.length > 0) {
+        await usbDevice.transferOut(outEndpoint, data);
       }
     }
 
-    async function fetchDeviceInfo() {
-      if (!adbDevice) return;
-      try {
-        const modelShell = await adbDevice.shell('getprop ro.product.model');
-        const model = (await modelShell.receive()).data || 'Android Phone';
+    async function receiveAdbPacket() {
+      if (!usbDevice) return null;
+
+      const resHeader = await usbDevice.transferIn(inEndpoint, 24);
+      if (resHeader.data.byteLength < 24) return null;
+
+      const view = new DataView(resHeader.data.buffer);
+      const cmdCode = view.getUint32(0, true);
+      const arg0 = view.getUint32(4, true);
+      const arg1 = view.getUint32(8, true);
+      const dataLen = view.getUint32(12, true);
+
+      const cmd = String.fromCharCode(cmdCode & 0xFF, (cmdCode >> 8) & 0xFF, (cmdCode >> 16) & 0xFF, (cmdCode >> 24) & 0xFF);
+
+      let payload = new Uint8Array(0);
+      if (dataLen > 0) {
+        const resData = await usbDevice.transferIn(inEndpoint, dataLen);
+        payload = new Uint8Array(resData.data.buffer);
+      }
+
+      return { cmd, arg0, arg1, payload };
+    }
+
+    async function performAdbHandshake() {
+      // Step 1: Send CNXN
+      const hostPayload = new TextEncoder().encode("host::webadb\0");
+      await sendAdbPacket("CNXN", 0x01000000, 1048576, hostPayload);
+
+      let res = await receiveAdbPacket();
+      
+      // Step 2: Handle AUTH Challenge if required
+      if (res && res.cmd === "AUTH" && res.arg0 === 1) {
+        const token = res.payload;
         
-        const serialShell = await adbDevice.shell('getprop ro.serialno');
-        const serial = (await serialShell.receive()).data || 'USB Device';
+        // Sign token with RSA
+        const signature = await window.crypto.subtle.sign(
+          "RSASSA-PKCS1-v1_5",
+          rsaKeyPair.privateKey,
+          token
+        );
 
-        document.getElementById('dev-model-name').innerText = model.trim();
-        document.getElementById('dev-serial').innerText = `SN: ${serial.trim()}`;
-        document.getElementById('device-info-badge').classList.remove('hidden');
-      } catch (e) {
-        console.warn('Get device info error:', e);
+        // Send AUTH Signature
+        await sendAdbPacket("AUTH", 2, 0, new Uint8Array(signature));
+        res = await receiveAdbPacket();
+
+        // If device asks for Public Key
+        if (res && res.cmd === "AUTH") {
+          const pubKeyExport = await window.crypto.subtle.exportKey("spki", rsaKeyPair.publicKey);
+          const base64Key = btoa(String.fromCharCode(...new Uint8Array(pubKeyExport)));
+          const pubKeyPayload = new TextEncoder().encode(`${base64Key} webadb\0`);
+          
+          await sendAdbPacket("AUTH", 3, 0, pubKeyPayload);
+          res = await receiveAdbPacket();
+        }
+      }
+
+      if (!res || res.cmd !== "CNXN") {
+        throw new Error("No se pudo completar la autenticación ADB con el celular.");
       }
     }
 
-    async function startRealLogcatStream() {
-      if (!adbDevice) return;
+    async function startAdbLogcatStream() {
       try {
-        const stream = await adbDevice.open('shell:logcat -v threadtime');
-        const decoder = new TextDecoder('utf-8');
-        let leftover = '';
+        const localId = 1;
+        const openPayload = new TextEncoder().encode("shell:logcat -v threadtime\0");
+        await sendAdbPacket("OPEN", localId, 0, openPayload);
 
-        while (isConnected && stream) {
-          const res = await stream.receive();
-          if (res.cmd === 'WRTE' && res.data) {
-            const text = leftover + decoder.decode(res.data, { stream: true });
-            const lines = text.split('\n');
-            leftover = lines.pop(); // keep unfinished buffer line
+        let remoteId = 0;
+        const decoder = new TextDecoder("utf-8");
+        let bufferStr = "";
+
+        while (isConnected && usbDevice) {
+          const packet = await receiveAdbPacket();
+          if (!packet) continue;
+
+          if (packet.cmd === "OKAY") {
+            remoteId = packet.arg0;
+          } else if (packet.cmd === "WRTE") {
+            // Acknowledge receipt
+            await sendAdbPacket("OKAY", localId, remoteId);
+
+            const chunk = decoder.decode(packet.payload, { stream: true });
+            bufferStr += chunk;
+
+            const lines = bufferStr.split('\n');
+            bufferStr = lines.pop(); // save incomplete line
 
             lines.forEach(line => {
               if (line.trim().length > 0) {
                 ingestLogLine(line);
               }
             });
+          } else if (packet.cmd === "CLSE") {
+            break;
           }
         }
       } catch (err) {
-        console.error('Logcat stream error:', err);
+        console.error("Logcat stream error:", err);
       }
     }
 
-    // Parse standard Logcat threadtime format:
-    // 05-26 14:23:45.123  1234  5678 D TagName : Message text
     function parseLogLine(rawLine) {
       logCounter++;
       
@@ -644,23 +746,6 @@
         };
       }
 
-      // Fallback parser for brief or non-standard format
-      const simpleRegex = /^([VDIWEF])\/([^(]+)\(\s*(\d+)\):\s*(.*)$/;
-      const matchSimple = rawLine.match(simpleRegex);
-      if (matchSimple) {
-        return {
-          id: logCounter,
-          raw: rawLine,
-          time: new Date().toLocaleTimeString('es-ES') + '.000',
-          pid: matchSimple[3],
-          tid: '0',
-          level: matchSimple[1],
-          tag: matchSimple[2].trim(),
-          message: matchSimple[4]
-        };
-      }
-
-      // Default unstructured log record
       return {
         id: logCounter,
         raw: rawLine,
@@ -677,7 +762,6 @@
       const record = parseLogLine(rawLine);
       logsInLastSecond++;
 
-      // Circular buffer pruning
       if (rawLogs.length >= MAX_BUFFER_SIZE) {
         rawLogs.shift();
       }
@@ -708,23 +792,19 @@
     }
 
     function checkRecordMatchesFilter(record) {
-      // 1. Min Level Check
       const recordWeight = LEVEL_WEIGHTS[record.level] ?? 0;
       const minWeight = LEVEL_WEIGHTS[currentMinLevel] ?? 0;
       if (recordWeight < minWeight) return false;
 
-      // 2. Package / PID Filter
       if (currentPkgFilter.length > 0) {
         const matchesPkg = record.tag.toLowerCase().includes(currentPkgFilter) || record.pid.includes(currentPkgFilter);
         if (!matchesPkg) return false;
       }
 
-      // 3. Tag Filter
       if (currentTagFilter.length > 0) {
         if (!record.tag.toLowerCase().includes(currentTagFilter)) return false;
       }
 
-      // 4. Search Filter
       if (currentSearchQuery.length > 0) {
         if (isRegexSearch) {
           try {
@@ -735,9 +815,7 @@
           }
         } else {
           const queryLower = currentSearchQuery.toLowerCase();
-          const matchesMsg = record.message.toLowerCase().includes(queryLower);
-          const matchesTag = record.tag.toLowerCase().includes(queryLower);
-          return matchesMsg || matchesTag;
+          return record.message.toLowerCase().includes(queryLower) || record.tag.toLowerCase().includes(queryLower);
         }
       }
 
@@ -746,11 +824,11 @@
 
     function getLevelColorClasses(level) {
       switch (level) {
-        case 'V': return 'text-log-verbose bg-slate-800/60';
-        case 'D': return 'text-log-debug bg-blue-950/40';
-        case 'I': return 'text-log-info bg-emerald-950/40';
-        case 'W': return 'text-log-warn bg-amber-950/40';
-        case 'E': return 'text-log-error bg-red-950/40 font-semibold';
+        case 'V': return 'text-log-verbose bg-slate-900/60';
+        case 'D': return 'text-log-debug bg-blue-950/30';
+        case 'I': return 'text-log-info bg-emerald-950/30';
+        case 'W': return 'text-log-warn bg-amber-950/30';
+        case 'E': return 'text-log-error bg-red-950/30 font-semibold';
         case 'F': return 'text-white bg-rose-900 font-bold';
         default: return 'text-slate-300';
       }
@@ -762,28 +840,24 @@
       if (emptyMsg) emptyMsg.remove();
 
       const levelClasses = getLevelColorClasses(record.level);
-      
       const row = document.createElement('div');
-      row.className = `log-line px-2 py-0.5 rounded grid grid-cols-12 gap-2 border-b border-slate-900/40 transition-colors ${levelClasses}`;
+      row.className = `log-row px-2 py-0.5 rounded grid grid-cols-12 gap-2 border-b border-slate-900/40 transition-colors ${levelClasses}`;
       
       row.innerHTML = `
-        <div class="col-span-2 md:col-span-2 text-slate-400 select-none">${escapeHTML(record.time)}</div>
-        <div class="col-span-1 md:col-span-1 text-center text-slate-500 select-none">${escapeHTML(record.pid)}/${escapeHTML(record.tid)}</div>
-        <div class="col-span-1 md:col-span-1 text-center font-bold select-none">[${record.level}]</div>
-        <div class="col-span-2 md:col-span-2 truncate font-semibold text-slate-300" title="${escapeHTML(record.tag)}">${escapeHTML(record.tag)}</div>
-        <div class="col-span-6 md:col-span-6 break-words">${escapeHTML(record.message)}</div>
+        <div class="col-span-2 text-slate-400 select-none">${escapeHTML(record.time)}</div>
+        <div class="col-span-1 text-center text-slate-500 select-none">${escapeHTML(record.pid)}/${escapeHTML(record.tid)}</div>
+        <div class="col-span-1 text-center font-bold select-none">[${record.level}]</div>
+        <div class="col-span-2 truncate font-semibold text-slate-300" title="${escapeHTML(record.tag)}">${escapeHTML(record.tag)}</div>
+        <div class="col-span-6 break-words">${escapeHTML(record.message)}</div>
       `;
 
       container.appendChild(row);
 
-      // Keep max DOM elements pruned
       if (container.children.length > MAX_DOM_RENDER) {
         container.removeChild(container.firstChild);
       }
 
-      if (autoScroll) {
-        container.scrollTop = container.scrollHeight;
-      }
+      if (autoScroll) container.scrollTop = container.scrollHeight;
     }
 
     function reRenderDOM() {
@@ -794,7 +868,7 @@
         container.innerHTML = `
           <div id="logcat-empty" class="text-center py-20 text-slate-600 flex flex-col items-center gap-3">
             <i class="fa-solid fa-filter text-3xl text-slate-700"></i>
-            <p class="text-sm">No hay logs que coincidan con los filtros aplicados.</p>
+            <p class="text-sm">No hay logs que coincidan con los filtros.</p>
           </div>
         `;
         updateSummaryCounters();
@@ -805,13 +879,13 @@
       filteredLogs.forEach(record => {
         const levelClasses = getLevelColorClasses(record.level);
         const row = document.createElement('div');
-        row.className = `log-line px-2 py-0.5 rounded grid grid-cols-12 gap-2 border-b border-slate-900/40 transition-colors ${levelClasses}`;
+        row.className = `log-row px-2 py-0.5 rounded grid grid-cols-12 gap-2 border-b border-slate-900/40 transition-colors ${levelClasses}`;
         row.innerHTML = `
-          <div class="col-span-2 md:col-span-2 text-slate-400 select-none">${escapeHTML(record.time)}</div>
-          <div class="col-span-1 md:col-span-1 text-center text-slate-500 select-none">${escapeHTML(record.pid)}/${escapeHTML(record.tid)}</div>
-          <div class="col-span-1 md:col-span-1 text-center font-bold select-none">[${record.level}]</div>
-          <div class="col-span-2 md:col-span-2 truncate font-semibold text-slate-300" title="${escapeHTML(record.tag)}">${escapeHTML(record.tag)}</div>
-          <div class="col-span-6 md:col-span-6 break-words">${escapeHTML(record.message)}</div>
+          <div class="col-span-2 text-slate-400 select-none">${escapeHTML(record.time)}</div>
+          <div class="col-span-1 text-center text-slate-500 select-none">${escapeHTML(record.pid)}/${escapeHTML(record.tid)}</div>
+          <div class="col-span-1 text-center font-bold select-none">[${record.level}]</div>
+          <div class="col-span-2 truncate font-semibold text-slate-300" title="${escapeHTML(record.tag)}">${escapeHTML(record.tag)}</div>
+          <div class="col-span-6 break-words">${escapeHTML(record.message)}</div>
         `;
         fragment.appendChild(row);
       });
@@ -819,61 +893,6 @@
       container.appendChild(fragment);
       if (autoScroll) container.scrollTop = container.scrollHeight;
       updateSummaryCounters();
-    }
-
-    function escapeHTML(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
-
-    function togglePauseStream() {
-      isPaused = !isPaused;
-      const btnText = document.getElementById('pause-text');
-      const icon = document.getElementById('pause-icon');
-
-      if (isPaused) {
-        btnText.innerText = 'Reanudar';
-        icon.className = 'fa-solid fa-play text-emerald-400';
-        showToast('Stream pausado. Nuevos logs retenidos en buffer.', 'info');
-      } else {
-        btnText.innerText = 'Pausar';
-        icon.className = 'fa-solid fa-pause text-amber-400';
-        applyFilters();
-        showToast('Stream reanudado.', 'info');
-      }
-    }
-
-    function clearLogcatScreen() {
-      rawLogs = [];
-      filteredLogs = [];
-      logCounter = 0;
-      reRenderDOM();
-      showToast('Pantalla de logs limpiada.', 'info');
-    }
-
-    function toggleAutoScroll() {
-      autoScroll = document.getElementById('toggle-autoscroll').checked;
-    }
-
-    function updateSummaryCounters() {
-      document.getElementById('lbl-visible-count').innerText = filteredLogs.length;
-      document.getElementById('lbl-total-count').innerText = rawLogs.length;
-      document.getElementById('tab-log-count').innerText = filteredLogs.length;
-
-      const pct = Math.round((rawLogs.length / MAX_BUFFER_SIZE) * 100);
-      document.getElementById('lbl-buffer-pct').innerText = `${pct}%`;
-    }
-
-    function startMetricsLoop() {
-      setInterval(() => {
-        currentLogRate = logsInLastSecond;
-        logsInLastSecond = 0;
-        document.getElementById('lbl-rate').innerText = `${currentLogRate} logs/s`;
-      }, 1000);
     }
 
     function exportLogcatFile() {
@@ -898,7 +917,27 @@
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      showToast(`Archivo ${filename} descargado exitosamente.`, 'success');
+      showToast(`Archivo ${filename} exportado.`, 'success');
+    }
+
+    function setupTerminalKeyListeners() {
+      const input = document.getElementById('terminal-input');
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowUp') {
+          if (historyIndex < commandHistory.length - 1) {
+            historyIndex++;
+            input.value = commandHistory[commandHistory.length - 1 - historyIndex];
+          }
+        } else if (e.key === 'ArrowDown') {
+          if (historyIndex > 0) {
+            historyIndex--;
+            input.value = commandHistory[commandHistory.length - 1 - historyIndex];
+          } else if (historyIndex === 0) {
+            historyIndex = -1;
+            input.value = '';
+          }
+        }
+      });
     }
 
     async function submitTerminalCommand(e) {
@@ -907,7 +946,10 @@
       const cmd = input.value.trim();
       if (!cmd) return;
 
+      commandHistory.push(cmd);
+      historyIndex = -1;
       input.value = '';
+
       await executeAdbShell(cmd);
     }
 
@@ -921,7 +963,6 @@
       const term = document.getElementById('terminal-output');
       term.innerHTML += `<div class="text-emerald-400 font-bold mt-2">$ ${escapeHTML(fullCommand)}</div>`;
 
-      // Extract shell sub-command
       let cleanCmd = fullCommand.replace(/^adb\s+shell\s+/, '').trim();
 
       if (isDemoMode) {
@@ -933,26 +974,38 @@
         return;
       }
 
-      if (!isConnected || !adbDevice) {
+      if (!isConnected || !usbDevice) {
         term.innerHTML += `<div class="text-red-400 font-bold">Error: Dispositivo no conectado vía USB. Conecta el celular o activa el Modo Demo.</div>`;
         term.scrollTop = term.scrollHeight;
         return;
       }
 
       try {
-        const shell = await adbDevice.shell(cleanCmd);
-        const res = await shell.receive();
-        const text = new TextDecoder().decode(res.data) || '(Sin respuesta)';
-        term.innerHTML += `<div class="text-slate-300 whitespace-pre-wrap font-mono">${escapeHTML(text)}</div>`;
+        const localId = Math.floor(Math.random() * 1000) + 10;
+        const openPayload = new TextEncoder().encode(`shell:${cleanCmd}\0`);
+        await sendAdbPacket("OPEN", localId, 0, openPayload);
+
+        let output = "";
+        const decoder = new TextDecoder("utf-8");
+
+        while (true) {
+          const packet = await receiveAdbPacket();
+          if (!packet) break;
+
+          if (packet.cmd === "WRTE") {
+            await sendAdbPacket("OKAY", localId, packet.arg0);
+            output += decoder.decode(packet.payload, { stream: true });
+          } else if (packet.cmd === "CLSE") {
+            break;
+          }
+        }
+
+        term.innerHTML += `<div class="text-slate-300 whitespace-pre-wrap font-mono">${escapeHTML(output || '(Sin respuesta)')}</div>`;
       } catch (err) {
         term.innerHTML += `<div class="text-red-400 font-bold">Error al ejecutar comando: ${escapeHTML(err.message)}</div>`;
       }
 
       term.scrollTop = term.scrollHeight;
-    }
-
-    function clearTerminal() {
-      document.getElementById('terminal-output').innerHTML = '<span class="text-slate-500">Terminal limpiada.<br></span>';
     }
 
     function toggleDemoMode() {
@@ -967,16 +1020,15 @@
       isDemoMode = true;
       if (isConnected) disconnectUSBDevice();
 
-      document.getElementById('demo-btn-text').innerText = 'Salir Modo Demo';
-      document.getElementById('btn-demo').className = 'bg-amber-600 hover:bg-amber-500 text-white border border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition active:scale-95';
+      document.getElementById('demo-btn-text').innerText = 'Salir Demo';
+      document.getElementById('btn-demo').className = 'bg-amber-600 hover:bg-amber-500 text-white border border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition';
 
       document.getElementById('dev-model-name').innerText = 'Pixel 8 Pro (Demo)';
       document.getElementById('dev-serial').innerText = 'SN: DEMO987654321';
-      document.getElementById('dev-battery').innerText = '88%';
       document.getElementById('device-info-badge').classList.remove('hidden');
 
-      updateStatus('connected', 'Modo Demo Activo');
-      showToast('Modo Demostración activado. Generando logs simulados...', 'success');
+      updateStatus('connected', 'Modo Demo');
+      showToast('Modo Demo activado con logs simulados.', 'success');
 
       startDemoLogGenerator();
     }
@@ -985,28 +1037,25 @@
       isDemoMode = false;
       if (demoInterval) clearInterval(demoInterval);
 
-      document.getElementById('demo-btn-text').innerText = 'Probar Modo Demo';
-      document.getElementById('btn-demo').className = 'bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition active:scale-95';
-      
+      document.getElementById('demo-btn-text').innerText = 'Modo Demo';
+      document.getElementById('btn-demo').className = 'bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition';
+
       document.getElementById('device-info-badge').classList.add('hidden');
       updateStatus('disconnected', 'Desconectado');
-      showToast('Modo Demostración desactivado.', 'info');
+      showToast('Modo Demo desactivado.', 'info');
     }
 
     function startDemoLogGenerator() {
-      const demoPackages = ['com.example.myapp', 'com.google.android.gms', 'com.android.systemui', 'com.whatsapp', 'com.android.phone'];
-      const demoTags = ['ActivityManager', 'OkHttp', 'Flutter', 'FirebaseInit', 'PackageManager', 'SurfaceFlinger', 'BluetoothAdapter'];
+      const demoPackages = ['com.example.myapp', 'com.google.android.gms', 'com.android.systemui'];
+      const demoTags = ['ActivityManager', 'OkHttp', 'Flutter', 'FirebaseInit', 'SurfaceFlinger'];
       const levels = ['V', 'D', 'I', 'W', 'E'];
 
       const sampleMsgs = [
         'Starting activity: Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] }',
         'HTTP GET https://api.example.com/v1/user/profile 200 OK (342ms)',
         'Database connection pool initialized with 5 connections',
-        'GC_CONCURRENT freed 2048K, 15% free 18MB/21MB, paused 2ms+3ms',
         'W/InputMethodManager: Ignore showSoftInput() as view is not window focused',
-        'E/AndroidRuntime: FATAL EXCEPTION: main NullPointerException at com.example.myapp.MainActivity.onCreate(MainActivity.java:42)',
-        'Received FCM push notification payload: { id: 98123, type: "chat_message" }',
-        'BluetoothGatt: connect() - device: 70:2C:1F:39:B4:88, autoConnect: false'
+        'E/AndroidRuntime: FATAL EXCEPTION: main NullPointerException at com.example.myapp.MainActivity.onCreate(MainActivity.java:42)'
       ];
 
       if (demoInterval) clearInterval(demoInterval);
@@ -1026,26 +1075,98 @@
 
         const raw = `${timeStr} ${pid} ${tid} ${level} ${tag}: [${pkg}] ${msg}`;
         ingestLogLine(raw);
-      }, 250);
+      }, 300);
     }
 
     function getDemoCommandResponse(cmd) {
       if (cmd.includes('battery')) {
-        return `Current Battery Service state:\n  AC powered: false\n  USB powered: true\n  Wireless powered: false\n  status: 2 (Charging)\n  health: 2 (Good)\n  present: true\n  level: 88\n  scale: 100\n  voltage: 4210 mV\n  temperature: 295 (29.5 C)\n  technology: Li-ion`;
+        return `Current Battery Service state:\n  AC powered: false\n  USB powered: true\n  status: 2 (Charging)\n  health: 2 (Good)\n  level: 92\n  scale: 100\n  voltage: 4280 mV\n  temperature: 285 (28.5 C)`;
       }
       if (cmd.includes('getprop')) {
-        return `[ro.build.version.release]: [14]\n[ro.build.version.sdk]: [34]\n[ro.product.model]: [Pixel 8 Pro]\n[ro.product.brand]: [google]\n[ro.product.name]: [husky]\n[ro.serialno]: [DEMO987654321]`;
+        return `[ro.build.version.release]: [14]\n[ro.build.version.sdk]: [34]\n[ro.product.model]: [Pixel 8 Pro]\n[ro.product.brand]: [google]\n[ro.serialno]: [DEMO987654321]`;
       }
       if (cmd.includes('pm list packages')) {
-        return `package:com.example.myapp\npackage:com.google.android.gms\npackage:com.android.systemui\npackage:com.whatsapp\npackage:com.android.chrome`;
+        return `package:com.example.myapp\npackage:com.google.android.gms\npackage:com.android.systemui`;
       }
-      if (cmd.includes('df -h')) {
-        return `Filesystem     Size   Used  Available Use% Mounted on\n/dev/block/dm-0 128G   42G    86G       33% /data\n/dev/block/dm-1 4.0G   3.2G   800M      80% /system`;
+      return `Comando simulado OK: ${cmd}`;
+    }
+
+    /* Helper Utilities */
+    function updateStatus(state, text) {
+      const dot = document.getElementById('status-dot');
+      const label = document.getElementById('status-text');
+      const btn = document.getElementById('btn-connect');
+
+      label.innerText = text;
+
+      if (state === 'connected') {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500';
+        btn.innerHTML = '<i class="fa-solid fa-plug-circle-xmark"></i> <span>Desconectar</span>';
+        btn.className = 'bg-red-600 hover:bg-red-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition';
+      } else if (state === 'connecting' || state === 'authorizing') {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 pulse-glow';
+      } else {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-500';
+        btn.innerHTML = '<i class="fa-solid fa-plug"></i> <span>Conectar USB</span>';
+        btn.className = 'bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition';
       }
-      if (cmd.includes('screencap')) {
-        return `Captura guardada exitosamente en /sdcard/screenshot.png`;
-      }
-      return `Comando simulado ejecutado correctamente: ${cmd}\nExit code: 0`;
+    }
+
+    function togglePauseStream() {
+      isPaused = !isPaused;
+      document.getElementById('pause-text').innerText = isPaused ? 'Reanudar' : 'Pausar';
+      document.getElementById('pause-icon').className = isPaused ? 'fa-solid fa-play text-emerald-400' : 'fa-solid fa-pause text-amber-400';
+    }
+
+    function clearLogcatScreen() {
+      rawLogs = [];
+      filteredLogs = [];
+      logCounter = 0;
+      reRenderDOM();
+    }
+
+    function toggleAutoScroll() {
+      autoScroll = document.getElementById('toggle-autoscroll').checked;
+    }
+
+    function updateSummaryCounters() {
+      document.getElementById('lbl-visible-count').innerText = filteredLogs.length;
+      document.getElementById('lbl-total-count').innerText = rawLogs.length;
+      document.getElementById('tab-log-count').innerText = filteredLogs.length;
+
+      const pct = Math.round((rawLogs.length / MAX_BUFFER_SIZE) * 100);
+      document.getElementById('lbl-buffer-pct').innerText = `${pct}%`;
+    }
+
+    function startMetricsLoop() {
+      setInterval(() => {
+        currentLogRate = logsInLastSecond;
+        logsInLastSecond = 0;
+        document.getElementById('lbl-rate').innerText = `${currentLogRate} logs/s`;
+      }, 1000);
+    }
+
+    function clearTerminal() {
+      document.getElementById('terminal-output').innerHTML = '<span class="text-slate-500">Terminal limpiada.<br></span>';
+    }
+
+    function copyToClipboard(text) {
+      const input = document.createElement('textarea');
+      input.value = text;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      showToast('Copiado al portapapeles', 'success');
+    }
+
+    function escapeHTML(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     }
   </script>
 </body>
